@@ -1,0 +1,174 @@
+  Author: Matthew Thomas
+    Date: 3/16/2019
+Contains: Design details for CSCI E-215 homework 3
+==================================================
+Project: sttyl
+
+Purpose: Set a limited number of options for a terminal device interface.
+
+Outline:
+	sttyl with no arguments will print the current values for options
+	it knows about. Special characters you can change are erase and
+	kill. Other attributes can be turned on using the name, or turned
+	off by adding a '-' before the attribute. See the Arguments section
+	below for examples.
+
+Arguments:
+	sttyl accepts arguments for the following flags:
+
+			icrnl, hupcl, echo, echoe, opost, icanon, and isig
+	
+	Flag arguments with a leading dash, '-', will turn that flag OFF for the
+	tty. Flag arguments without a leading dash, will turn that flag ON. The
+	following command line, for example, will turn "echo" and "icanon" ON,
+	and turn "hupcl" OFF.
+	
+			./sttyl echo icanon -hupcl
+	
+	sttyl also accepts arguments for the following control chars:
+
+			erase and kill
+			
+	These arguments take a proceeding value of a single char that is used to
+	replace the control char. The following command line, for example, will
+	set "erase" to 'm' and "kill" to '^X'
+	
+			./sttyl erase m kill ^X
+	
+	The real stty accepts two-char values in the form of caret-letter, such as
+	"^X". In the command line above, '^X' was obtained by pressing Control-X
+	on the keyboard, as opposed to the '^' caret char AND the 'X' char. As
+	mentioned in bullet #2 of the assignment, this implementation is not
+	required to handle this case, and it does not.
+	
+	sttyl accepts multiple arguments on a single command line (as in the
+	examples above). sttyl also accepts no arguments, and will print info
+	about the tty in this case. See the "Output" section below for what
+	info it outputs.
+
+Output:
+	When setting values for control characters or flags, sttyl has no output.
+	If there is an invalid or missing argument, a message will be output to
+	stderr.
+	
+	When sttyl is called with no arguments, sttyl will output basic info
+	about the tty. The info it prints includes the speed, size of the tty,
+	control chars, and state of all flags. The output is modeled after the
+	implementation of stty on macOS, which includes the flag-type as a
+	header -- e.g. "lflags: ..." -- in the output. On the nice servers,
+	stty does not output those "headers", but the flags are still sorted
+	by type.
+
+Data Structures:
+	sttyl is a table-driven program. Two structs are defined in sttyl.c: one
+	for the four flag types, and one for the special characters. Both tables
+	store the symbolic constant and the name of the associated flag or char.
+	The table_t struct for flags also stores a string of the type -- iflag,
+	oflag, cflag, and lflag -- and the offset value to find where the bit
+	mask is located in a termios struct.
+	
+	Two arrays, one for the four flag types and one for the special
+	characters, contain one struct per flag or char and are declared in the
+	same sttyl.c file.
+	
+	The method of using an offset value in the table is taken from Brandon
+	Williams' section on 2019-03-13. An offset is used to avoid the need of
+	a global termios struct and can be adapted to be used with any termios
+	struct. This offset value is used to construct a pointer to the correct
+	tcflag_t field for a given flag. To get the pointer, multiple casts are
+	required, and this is done in the show_flagset() and get_option()
+	functions. The specifics vary slightly depending on the function, but the
+	basics are as follows (again, copied from Brandon's section notes):
+	
+		tcflag_t * mode_p = (tcflag_t *)((char *)(info) + offset_val);
+			
+	First, "info", which is the address of the termios struct holding the
+	terminal settings, is cast as a char *. This is to make adding the
+	offset_val (which is an unsigned long), move the correct number of bytes.
+	At this stage, we have the address of the tcflag_t, and can cast it as
+	a tcflag_t *.
+	
+	Storing the flags and chars in these tables makes printing or changing
+	the values easy to do. Printing, done by show_charset() and
+	show_flagset(), loops through each table until the end, signified by the
+	NULL in the "name" member, and processing the data accordingly. To turn
+	a flag on or off, or set a special character, the same for loop is done
+	until a matching struct is found.
+
+Algorithms:
+	Printing:
+	To print the list of special characters and flags, show_flagset() and
+	show_charset() are used. Both iterate through the table (flags) and
+	cchars (special characters) arrays respectively.
+	
+	In show_flagset(), the offset value stored in the array is cast to a
+	tcflag_t pointer. When dereferenced, this provides the correct flag
+	values to compare with the current symbolic constant. For example,
+	in the "echo" entry, the offset will point to the c_lflag value in
+	the termios struct which can be bit-wise-and'ed with the symbolic
+	constant ECHO. If the bit-wise AND equals the constant, than the flag
+	is on. Otherwise, a leading dash is added to the output.
+	
+	In show_charset(), the symbolic constant stored in the c_value member
+	servers as the index-offset for the c_cc[] in the termios struct. To
+	correctly display the char stored there, two special cases are taken
+	into consideration. If the value equals _POSIX_VDISABLE, that special
+	character is not used and "<undef>" is printed. Otherwise, if the char
+	is a control character, as determined by iscntrl(), it is printed in
+	a two-char caret-letter representation. To obtain the letter portion,
+	the value is XORed with the constant CHAR_MASK which is 64, or the
+	ASCII value of '@'. In practice, this adds 64 to ASCII values 0-31 and
+	subtracts 64 from value 127, the DEL char (this idea was mentioned in
+	Piazza post @171). In all other cases, the chars are printable ASCII
+	and output as-is.
+	
+	Updating:
+	There is no special algorithm used to update a special character. As
+	long as there is a second argument presented, and that argument is
+	a one-character ASCII value, it will be assigned to the appropriate
+	index in the termios c_cc[] array.
+	
+	For flags, a similar process is followed to the printing steps. The
+	offset value stored in the array is cast to a tcflag_t pointer which
+	is used to perform the correct bitwise operation. To turn a flag on,
+	the correct c_*flag value in the termios struct is bitwise-ORed (|=)
+	with the symbolic constant. To turn a flag off, the c_*flag value is
+	bitwise-ANDed with the one's-complement of the symbolic constant.
+	
+
+Program Flow:
+	1 - Load the terminal settings in to a termios struct.
+	2 - If there are no command-line arguments, print the current values
+		for the flags and chars. See Algorithms above, for more info.
+	3 - If there are arguments, loop through and process them accordingly.
+		First check for a special character, erase and kill are supported.
+		This also requires an ASCII char as a second argument. Otherwise,
+		see if it matches a supported flag. If these criteria are met,
+		update the flag or char and move on to the next (see Algorithms
+		and Data Structures for how the updating takes place). If any of
+		the arguments are not valid, print an error message and quit the
+		program (see Error Handling for more).
+	4 - After processing command-line arguments, apply the changes back
+		to the termios struct and return.
+
+Error Handling:
+	sttyl can run into an error due to a bad system call or invalid user
+	argument input.
+	
+	System calls:
+	Calls when getting or setting terminal settings, tcgetattr(),
+	tcsetattr(), cfgetospeed(), and ioctl(), may all produce an error. These
+	functions will return -1 and set errno according to the man page. An error
+	will most likely occur due to the file descriptor not being valid, or a
+	valid tty.
+	
+	Invalid input:
+	When processing command-line arguments, there are three situations where
+	invalid input can occur:
+		1) the special character (erase or kill) is missing an argument
+		2) the argument given for the special character is non-ASCII or
+		   not a single character
+		3) it is not a special character, or a recognized flag argument.
+	In each of these cases, a corresponding error message is output (with
+	the offending value given on the command line), and the program exits 1.
+	

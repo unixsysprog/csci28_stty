@@ -1,0 +1,84 @@
+Script started on Sat 16 Mar 2019 08:35:17 AM EDT
+mst611@ice2:~/csci28/stty-hw$ sh-[K -v my_script.sh 
+#/bin/sh -v
+#
+# My test script to test my submission for sttyl.
+# It makes the program, performs a few sample tests
+# of my own, and runs the lib215-provided test script.
+#
+
+#-------------------------------------
+#    compile program
+#-------------------------------------
+make clean
+rm -f *.o sttyl
+
+make sttyl
+gcc -Wall -g -c sttyl.c
+gcc -Wall -g -o sttyl sttyl.o
+
+
+#-------------------------------------
+#    my negative tests
+#-------------------------------------
+
+# illegal arguments
+./sttyl foobar
+./sttyl: illegal argument `foobar'
+./sttyl foo bar
+./sttyl: illegal argument `foo'
+
+# missing argument
+./sttyl erase
+./sttyl: missing argument to `erase'
+./sttyl kill
+./sttyl: missing argument to `kill'
+
+# invalid integer argument (not a valid special char)
+./sttyl erase foo
+./sttyl: invalid integer argument `foo'
+./sttyl erase +m
+./sttyl: invalid integer argument `+m'
+
+#-------------------------------------
+#    run the course test-script
+#-------------------------------------
+~lib215/hw/stty/test.stty
+   0. Looking at output : tf should examine this 
+ 
+speed 38400 baud; rows 73; cols 121;
+cchars: eof = ^D; eol = <undef>; erase = ^?; intr = ^C; kill = ^U; quit = ^\; susp = ^Z; 
+iflags: icrnl 
+oflags: opost 
+cflags: -hupcl 
+lflags: isig icanon echo echoe echok 
+ 
+   I. testing erase and kill chars  
+        a. Simple chars .. /bin/stty: standard input: unable to perform all requested operations
+OK
+ 
+	c. Typical one-char control chars.. OK
+ 
+	d. No argument given to erase.../sttyl: missing argument to `erase'
+OK
+	Note: your version exited with 1
+ 
+  III. Checking each flag separately .. 
+		icrnl ..  OK 
+                hupcl ..  OK 
+                echo ..  OK 
+                echoe ..  OK 
+                opost ..  OK 
+		icanon ..  OK 
+                isig ..  OK 
+ 
+ IV. Checking all flag pairs
+ icrnl:OK hupcl:OK echo:OK echoe:OK opost:OK icanon:OK isig:OK/bin/stty: standard input: unable to perform all requested operations
+ 
+	Checking results .. 
+all tests worked correctly
+resetting tty
+mst611@ice2:~/csci28/stty-hw$ exit
+exit
+
+Script done on Sat 16 Mar 2019 08:35:33 AM EDT
